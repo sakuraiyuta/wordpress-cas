@@ -9,7 +9,7 @@ Authenticate users using the phpCAS package (http://www.ja-sig.org/wiki/display/
 
 == Description ==
 
-This plugin is a modification of "CAS Authentication plugin" written by candrews, sms225.
+This plugin is a modification of <a href="http://wordpress.org/extend/plugins/cas-authentication/">"CAS Authentication plugin" written by candrews, sms225</a>.
 
 Changes from original-source are below:
 
