@@ -3,7 +3,7 @@
 Plugin Name: CAS Authentication
 Version: 2.3.1
 Plugin URI: http://github.com/sakuraiyuta/wordpress-cas
-Description: This plugin is a modification of <a href="http://wordpress.org/extend/plugins/cas-authentication/">"CAS Authentication plugin" written by candrews, sms225</a>.
+Description: This plugin is a modification of <a href="http://wordpress.org/extend/plugins/cas-authentication/">&quot;CAS Authentication plugin&quot; written by candrews, sms225</a>.
 Author: Yuta Sakurai
 Author URI: http://github.com/sakuraiyuta/wordpress-cas
 License: GPLv2
