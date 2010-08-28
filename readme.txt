@@ -3,7 +3,7 @@ Contributors: Yuta Sakurai <sakurai.yuta@gmail.com>
 Tags: authentication, CAS, phpCAS
 Requires at least: 3.0.1
 Tested up to: 3.0.1
-Stable tag: 2.3.1
+Stable tag: 2.3.2
 
 Authenticate users using the phpCAS package (http://www.ja-sig.org/wiki/display/CASC/phpCAS).
 
@@ -15,6 +15,7 @@ Changes from original-source are below:
 
 1. "Auto-register new users" function modified for using on wordpress 3.0.1.
 2. a few changes of code formatting. (no effects on all functions, maybe.)
+3. "Auto-register new blogs" function added.
 
 == Installation ==
 
@@ -25,3 +26,6 @@ see: wordpress-cas/readme.original.txt
 2.3.1:
 - based on CAS Authentication plugin 2.3.
 - changed array-index of arguments for wp_insert_user().
+
+2.3.2:
+- added new-blog-generate feature.
