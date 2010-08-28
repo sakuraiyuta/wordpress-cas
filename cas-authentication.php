@@ -43,9 +43,9 @@ if ($cas_authentication_opt['server_hostname'] == '' ||
     $cas_configured = false;
 
 if ($cas_configured) {
-    phpCAS::client($cas_authentication_opt['cas_version'], 
-        $cas_authentication_opt['server_hostname'], 
-        intval($cas_authentication_opt['server_port']), 
+    phpCAS::client($cas_authentication_opt['cas_version'],
+        $cas_authentication_opt['server_hostname'],
+        intval($cas_authentication_opt['server_port']),
         $cas_authentication_opt['server_path']);
 
     // function added in phpCAS v. 0.6.0
@@ -75,10 +75,10 @@ if (!class_exists('CASAuthentication')) {
         // password used by the plugin
         function passwordRoot() {
             return 'Authenticated through CAS';
-        }    
+        }
 
     /*
-     We call phpCAS to authenticate the user at the appropriate time 
+     We call phpCAS to authenticate the user at the appropriate time
      (the script dies there if login was unsuccessful)
      If the user has not logged in previously, we create an accout for them
      */
@@ -89,7 +89,7 @@ if (!class_exists('CASAuthentication')) {
                 die("cas-authentication plugin not configured");
 
             // Reset values from input ($_POST and $_COOKIE)
-            $username = $password = '';		
+            $username = $password = '';
 
             phpCAS::forceAuthentication();
 
@@ -134,11 +134,49 @@ if (!class_exists('CASAuthentication')) {
                     if ($cas_authentication_opt['email_suffix'] != '')
                         $user_email = $username . '@' . $cas_authentication_opt['email_suffix'];
 
-                    $user_info = array();
-                    $user_info['user_login'] = $username;
-                    $user_info['user_pass'] = $password;
-                    $user_info['user_email'] = $user_email;
-                    wp_insert_user($user_info);
+                    if ($cas_authentication_opt['new_blog'] == 1) {
+                        global $current_site;
+
+                        // generate new domain and path
+                        $domain = $cas_authentication_opt['blog_prefix'];
+                        $domain .= ($cas_authentication_opt['hash_domain']) ?
+                            substr(sha1($username), 0, 8) : $username;
+                        if ( is_subdomain_install() ) {
+                            $newdomain = $domain . '.' . preg_replace( '|^www\.|', '', $current_site->domain );
+                            $path = $current_site->path;
+                        } else {
+                            $newdomain = $current_site->domain;
+                            $path = $current_site->path . $domain . '/';
+                        }
+
+                        $newblog_options = array(
+                            'public' => 1,
+                            'cas_authentication_options' => $cas_authentication_opt
+                        );
+
+                        // create user
+                        $user_id = wpmu_create_user( $username, $password, $user_email );
+                        if ( ! $user_id ) {
+                            wp_die( __( 'CAS Authentication: There was an error creating the user.' ) );
+                        }
+                        $title = "$username's blog";
+
+                        // create blog
+                        $id = wpmu_create_blog( $newdomain, $path, $title, $user_id , $newblog_options, $current_site->id );
+                        if ( is_wp_error( $id ) ) {
+                            wp_die( $id->get_error_message() );
+                        }
+                    } else {
+                        $user_info = array();
+                        $user_info['user_login'] = $username;
+                        $user_info['user_pass'] = $password;
+                        $user_info['user_email'] = $user_email;
+
+                        $user_id = wp_insert_user($user_info);
+                        if ( ! $user_id ) {
+                            wp_die( __( 'CAS Authentication: There was an error creating the user.' ) );
+                        }
+                    }
                 }
 
                 else {
@@ -201,7 +239,7 @@ function cas_authentication_add_options_page() {
     if (function_exists('add_options_page')) {
         add_options_page('CAS Authentication', 'CAS Authentication', 8, basename(__FILE__), 'cas_authentication_options_page');
     }
-} 
+}
 
 function cas_authentication_options_page() {
     global $wpdb;
@@ -209,7 +247,10 @@ function cas_authentication_options_page() {
     // Setup Default Options Array
     $optionarray_def = array(
         'new_user' => FALSE,
+        'new_blog' => FALSE,
+        'hash_domain' => FALSE,
         'redirect_url' => '',
+        'blog_prefix' => 'cas_',
         'email_suffix' => 'yourschool.edu',
         'cas_version' => CAS_VERSION_1_0,
         'include_path' => '',
@@ -218,11 +259,14 @@ function cas_authentication_options_page() {
         'server_path' => ''
     );
 
-    if (isset($_POST['submit']) ) {    
+    if (isset($_POST['submit']) ) {
         // Options Array Update
         $optionarray_update = array (
             'new_user' => $_POST['new_user'],
+            'new_blog' => $_POST['new_blog'],
+            'hash_domain' => $_POST['hash_domain'],
             'redirect_url' => $_POST['redirect_url'],
+            'blog_prefix' => $_POST['blog_prefix'],
             'email_suffix' => $_POST['email_suffix'],
             'include_path' => $_POST['include_path'],
             'cas_version' => $_POST['cas_version'],
@@ -231,7 +275,6 @@ function cas_authentication_options_page() {
             'server_path' => $_POST['server_path']
         );
 
-
         update_option('cas_authentication_options', $optionarray_update);
     }
 
@@ -239,71 +282,103 @@ function cas_authentication_options_page() {
     $optionarray_def = get_option('cas_authentication_options');
 
 ?>
-    <div class="wrap">
+<div class="wrap">
     <h2>CAS Authentication Options</h2>
     <form method="post" action="<?php echo $_SERVER['PHP_SELF'] . '?page=' . basename(__FILE__); ?>&updated=true">
-    <fieldset class="options">
+        <fieldset class="options">
 
-     <h3>User registration options</h3>
-    <table width="700px" cellspacing="2" cellpadding="5" class="editform">
-       <tr>
-       <td colspan="2">Checking <em>Auto-register new users</em> will automatically create a new user (with role of Subscriber) upon successful login of a new visitor to the site.</td>
-       </tr>
-       <tr valign="center"> 
-       <th width="200px" scope="row">Auto-register new users?</th> 
-       <td width="15px"><input name="new_user" type="checkbox" id="new_user_inp" value="1" checked="<?php checked('1', $optionarray_def['new_user']); ?>" /></td>
-       </tr>
-           <tr>
-           <td colspan="2">If you know that the owner of the CAS authentication service issues email addresses based on their netids, you can predict your users' emails here</td>
-           </tr>
-       <tr valign="center">
-       <th width="200px" scope="row">E-mail Suffix</th> 
-       <td>netid@<input type="text" name="email_suffix" id="email_suffix_inp" value="<?php echo $optionarray_def['email_suffix']; ?>" size="35" /></td>
-       </tr>
-    </table>
+            <h3>User registration options</h3>
+            <h4>!!!CAUTION!!!</h4>
+            <p>
+                If you want to use <em>Auto-register new blogs</em>, <strong>you must set &quot;Network Activate&quot; in Plugins page, not use &quot;Activate&quot;!</strong>
+            </p>
 
-    <h3>phpCAS options</h3>
-    <p>Note: Once you fill in these options, wordpress authentication will happen through CAS, even if you misconfigure it. To avoid being locked out of Wordpress, use a second browser to check your settings before you end this session as administrator. If you get an error in the other browser, correct your settings here. If you can not resolve the issue, disable this plug-in.</p>
-
-    <h4>php CAS include path</h4>
-    <table width="700px" cellspacing="2" cellpadding="5" class="editform">
+            <table width="700px" cellspacing="2" cellpadding="5" class="editform">
                 <tr>
-                <td colspan="2">Full absolute path to CAS.php script</td>
+                    <td colspan="2">Checking <em>Auto-register new users</em> will automatically create a new user (with role of Subscriber) upon successful login of a new visitor to the site.</td>
                 </tr>
-        <tr valign="center"> 
-        <th width="300px" scope="row">CAS.php path</th> 
-        <td><input type="text" name="include_path" id="include_path_inp" value="<?php echo $optionarray_def['include_path']; ?>" size="35" /></td>
-        </tr>
-    </table>    
+                <tr valign="center">
+                    <th width="200px" scope="row">Auto-register new users?</th>
+                    <td width="15px"><input name="new_user" type="checkbox" id="new_user_inp" value="1" <?php checked('1', $optionarray_def['new_user']); ?> /></td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        Checking <em>Auto-register new blogs</em> will automatically create a new blog (with role of Administrator) upon successful login of a new visitor to the site.
+                    </td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">Auto-register new blogs?</th>
+                    <td width="15px"><input name="new_blog" type="checkbox" id="new_blog_inp" value="1" <?php checked('1', $optionarray_def['new_blog']); ?> /></td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        Checking <em>Use hashed blog-path</em> will create blog-path by sha1-hash based on username. Default is raw-username.
+                    </td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">Use hashed blog-path?</th>
+                    <td width="15px"><input name="hash_domain" type="checkbox" id="hash_domain_inp" value="1" <?php checked('1', $optionarray_def['hash_domain']); ?> /></td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        You can set prefix on blog-path. It's strongly recommended.
+                    </td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">blog-path prefix</th>
+                    <td><input type="text" name="blog_prefix" id="blog_prefix_inp" value="<?php echo $optionarray_def['blog_prefix']; ?>" size="35" /></td>
+                </tr>
+                <tr>
+                    <td colspan="2">If you know that the owner of the CAS authentication service issues email addresses based on their netids, you can predict your users' emails here</td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">E-mail Suffix</th>
+                    <td>netid@<input type="text" name="email_suffix" id="email_suffix_inp" value="<?php echo $optionarray_def['email_suffix']; ?>" size="35" /></td>
+                </tr>
+            </table>
 
-    <h4>phpCAS::client() parameters</h4>
-    <table width="700px" cellspacing="2" cellpadding="5" class="editform">
-        <tr valign="center"> 
-            <th width="300px" scope="row">CAS verions</th> 
-            <td><select name="cas_version" id="cas_version_inp">
-                <option value="2.0" <?php echo ($optionarray_def['cas_version'] == '2.0')?'selected':''; ?>>CAS_VERSION_2_0</option>
-                <option value="1.0" <?php echo ($optionarray_def['cas_version'] == '1.0')?'selected':''; ?>>CAS_VERSION_1_0</option>
-             </td>
-        </tr>
-        <tr valign="center"> 
-            <th width="300px" scope="row">server hostname</th> 
-            <td><input type="text" name="server_hostname" id="server_hostname_inp" value="<?php echo $optionarray_def['server_hostname']; ?>" size="35" /></td>
-        </tr>
-        <tr valign="center"> 
-            <th width="300px" scope="row">server port</th> 
-            <td><input type="text" name="server_port" id="server_port_inp" value="<?php echo $optionarray_def['server_port']; ?>" size="35" /></td>
-        </tr>
-        <tr valign="center"> 
-            <th width="300px" scope="row">server path</th> 
-            <td><input type="text" name="server_path" id="server_path_inp" value="<?php echo $optionarray_def['server_path']; ?>" size="35" /></td>
-        </tr>
-    </table>
-    </fieldset>
-    <p />
-    <div class="submit">
-        <input type="submit" name="submit" value="<?php _e('Update Options') ?> &raquo;" />
-    </div>
-    </form>
+            <h3>phpCAS options</h3>
+            <p>Note: Once you fill in these options, wordpress authentication will happen through CAS, even if you misconfigure it. To avoid being locked out of Wordpress, use a second browser to check your settings before you end this session as administrator. If you get an error in the other browser, correct your settings here. If you can not resolve the issue, disable this plug-in.</p>
+
+            <h4>php CAS include path</h4>
+            <table width="700px" cellspacing="2" cellpadding="5" class="editform">
+                <tr>
+                    <td colspan="2">Full absolute path to CAS.php script</td>
+                </tr>
+                <tr valign="center">
+                    <th width="300px" scope="row">CAS.php path</th>
+                    <td><input type="text" name="include_path" id="include_path_inp" value="<?php echo $optionarray_def['include_path']; ?>" size="35" /></td>
+                </tr>
+            </table>
+
+            <h4>phpCAS::client() parameters</h4>
+            <table width="700px" cellspacing="2" cellpadding="5" class="editform">
+                <tr valign="center">
+                    <th width="300px" scope="row">CAS verions</th>
+                    <td><select name="cas_version" id="cas_version_inp">
+                            <option value="2.0" <?php echo ($optionarray_def['cas_version'] == '2.0')?'selected':''; ?>>CAS_VERSION_2_0</option>
+                            <option value="1.0" <?php echo ($optionarray_def['cas_version'] == '1.0')?'selected':''; ?>>CAS_VERSION_1_0</option>
+                        </td>
+                    </tr>
+                    <tr valign="center">
+                        <th width="300px" scope="row">server hostname</th>
+                        <td><input type="text" name="server_hostname" id="server_hostname_inp" value="<?php echo $optionarray_def['server_hostname']; ?>" size="35" /></td>
+                    </tr>
+                    <tr valign="center">
+                        <th width="300px" scope="row">server port</th>
+                        <td><input type="text" name="server_port" id="server_port_inp" value="<?php echo $optionarray_def['server_port']; ?>" size="35" /></td>
+                    </tr>
+                    <tr valign="center">
+                        <th width="300px" scope="row">server path</th>
+                        <td><input type="text" name="server_path" id="server_path_inp" value="<?php echo $optionarray_def['server_path']; ?>" size="35" /></td>
+                    </tr>
+                </table>
+            </fieldset>
+            <p />
+            <div class="submit">
+                <input type="submit" name="submit" value="<?php _e('Update Options') ?> &raquo;" />
+            </div>
+        </form>
 <?php
 }
 ?>
