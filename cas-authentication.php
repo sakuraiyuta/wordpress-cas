@@ -177,6 +177,15 @@ if (!class_exists('CASAuthentication')) {
                             wp_die( __( 'CAS Authentication: There was an error creating the user.' ) );
                         }
                     }
+
+                    if ($cas_authentication_opt['register_existing_blog']) {
+                        $regist_blog_ids = explode(',', $register_blog_ids);
+                        $role = $cas_authentication_opt['register_blog_role'];
+
+                        foreach ($regist_blog_ids as $regist_blog_id) {
+                            add_user_to_blog($regist_blog_id, $user_id, $role);
+                        }
+                    }
                 }
 
                 else {
@@ -248,6 +257,9 @@ function cas_authentication_options_page() {
     $optionarray_def = array(
         'new_user' => FALSE,
         'new_blog' => FALSE,
+        'register_existing_blog' => FALSE,
+        'register_blog_ids' => '1',
+        'register_blog_role' => '',
         'hash_domain' => FALSE,
         'redirect_url' => '',
         'blog_prefix' => 'cas_',
@@ -264,6 +276,9 @@ function cas_authentication_options_page() {
         $optionarray_update = array (
             'new_user' => $_POST['new_user'],
             'new_blog' => $_POST['new_blog'],
+            'register_existing_blog' => $_POST['register_existing_blog'],
+            'register_blog_ids' => $_POST['register_blog_ids'],
+            'register_blog_role' => $_POST['register_blog_role'],
             'hash_domain' => $_POST['hash_domain'],
             'redirect_url' => $_POST['redirect_url'],
             'blog_prefix' => $_POST['blog_prefix'],
@@ -280,7 +295,11 @@ function cas_authentication_options_page() {
 
     // Get Options
     $optionarray_def = get_option('cas_authentication_options');
-
+    global $current_site, $wpdb;
+    $editblog_roles = get_blog_option(
+        $current_site->id,
+        $wpdb->get_blog_prefix($current_site->id) . "user_roles"
+    );
 ?>
 <div class="wrap">
     <h2>CAS Authentication Options</h2>
@@ -309,6 +328,34 @@ function cas_authentication_options_page() {
                 <tr valign="center">
                     <th width="200px" scope="row">Auto-register new blogs?</th>
                     <td width="15px"><input name="new_blog" type="checkbox" id="new_blog_inp" value="1" <?php checked('1', $optionarray_def['new_blog']); ?> /></td>
+                </tr>
+                <tr>
+                    <td colspan="2">
+                        Checking <em>Auto-register new cas-user for existing blogs</em> will automatically register new cas-user for existing blog upon successful login of a new visitor to the site.
+                    </td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">Auto-register new cas-user for existing blogs?</th>
+                    <td width="15px">
+                        <input name="register_existing_blog" type="checkbox" id="register_existing_blog_inp" value="1" <?php checked('1', $optionarray_def['register_existing_blog']); ?> />
+                    </td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">Please insert blog-ids sepalated by camma. (ex: 1,5,10)</th>
+                    <td width="15px">
+                        <input name="register_blog_ids" type="text" id="register_blog_ids_inp" value="<?php echo (! count(explode(',', $optionarray_def['register_blog_ids']))) ? "" : $optionarray_def['register_blog_ids']; ?>" />
+                    </td>
+                </tr>
+                <tr valign="center">
+                    <th width="200px" scope="row">You can select a new cas-user's role of existing blog.</th>
+                    <td width="15px">
+                        <select name="register_blog_role" type="checkbox" id="register_blog_role">
+                            <?php foreach ( $editblog_roles as $role => $role_assoc ) : ?>
+                            <?php $name = translate_user_role( $role_assoc['name'] ); ?>
+                            <option <?php selected( $role, $optionarray_def['register_blog_role'] ); ?> value="<?php echo esc_attr($role); ?>"><?php echo esc_html($name); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
                 </tr>
                 <tr>
                     <td colspan="2">
